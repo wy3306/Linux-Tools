@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	xls "github.com/extrame/xls"
 )
 
 type table struct {
@@ -158,11 +160,20 @@ func readTable(path string) (table, error) {
 	switch ext {
 	case ".csv":
 		return readCSV(path)
-	case ".xlsx", ".xls":
+	case ".xlsx":
+		return readExcelLike(path)
+	case ".xls":
+		// 优先按老式 BIFF .xls 读取，失败再按 xlsx(zip) 兼容读取
+		if t, err := readXLSBIFF(path); err == nil {
+			return t, nil
+		}
 		return readExcelLike(path)
 	default:
-		// 尝试按xlsx读取，失败再按csv读取
+		// 兜底顺序：xlsx(zip) -> xls(BIFF) -> csv
 		if t, err := readExcelLike(path); err == nil {
+			return t, nil
+		}
+		if t, err := readXLSBIFF(path); err == nil {
 			return t, nil
 		}
 		return readCSV(path)
@@ -215,6 +226,42 @@ func readExcelLike(path string) (table, error) {
 	}
 	if len(best) == 0 {
 		return table{}, errors.New("工作表无可用数据")
+	}
+	return table{Rows: best}, nil
+}
+
+func readXLSBIFF(path string) (table, error) {
+	wb, err := xls.Open(path, "utf-8")
+	if err != nil {
+		return table{}, err
+	}
+	best := [][]string{}
+	for i := 0; i < wb.NumSheets(); i++ {
+		sheet := wb.GetSheet(i)
+		if sheet == nil {
+			continue
+		}
+		rows := make([][]string, 0, int(sheet.MaxRow)+1)
+		for r := 0; r <= int(sheet.MaxRow); r++ {
+			row := sheet.Row(r)
+			if row == nil {
+				rows = append(rows, []string{})
+				continue
+			}
+			last := row.LastCol()
+			arr := make([]string, last)
+			for c := 0; c < last; c++ {
+				arr[c] = row.Col(c)
+			}
+			rows = append(rows, arr)
+		}
+		normalizeRows(rows)
+		if scoreRows(rows) > scoreRows(best) {
+			best = rows
+		}
+	}
+	if len(best) == 0 {
+		return table{}, errors.New("xls工作表无可用数据")
 	}
 	return table{Rows: best}, nil
 }

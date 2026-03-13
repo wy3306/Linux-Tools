@@ -27,7 +27,7 @@ chmod +x ./netprobe-linux-arm64
 
 参数说明：
 
-- `-input`：输入表格路径，支持 `csv/xlsx`（扩展名为 `.xls` 但内容是 xlsx zip 也可解析）
+- `-input`：输入表格路径，支持 `csv/xlsx/xls`（兼容老式 BIFF `.xls` 与 xlsx-zip 结构）
 - `-timeout`：连接超时，默认 `5s`
 - `-workers`：并发探测协程数，默认 `50`
 - `-output`：结果输出文件（txt），默认自动生成 `probe_result_时间戳.txt`
